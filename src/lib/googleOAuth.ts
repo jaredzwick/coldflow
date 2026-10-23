@@ -98,14 +98,16 @@ export async function verifyGoogleCredential(credential: string): Promise<TokenP
 export function getGmailAuthorizationUrl(state?: string): string {
   const oauth2Client = getOAuth2Client();
 
-  // Scopes include warming receiver needs (modify + labels) so a single
-  // consent screen covers both campaign send and inbox warming. See
-  // docs/designs/2026-10-23-inbox-warming.md §Scope expansion (D2=A).
+  // gmail.modify already grants full label CRUD + spam/inbox state changes
+  // ("creating, modifying, and deleting labels, as well as sending and
+  // receiving mail" per Google's docs), so a separate gmail.labels scope is
+  // redundant and the GCP console hides it. Single consent covers campaign
+  // send + inbox warming. See docs/designs/2026-10-23-inbox-warming.md
+  // §Scope expansion (D2=A).
   const scopes = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/gmail.labels',
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
   ];
