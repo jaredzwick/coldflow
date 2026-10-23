@@ -35,6 +35,11 @@ const nextConfig = {
     return webpackConfig
   },
   async headers() { return [ { source: '/(.*)', headers: [ { key: 'Cross-Origin-Opener-Policy', value: 'same-origin', }, ], }, ]; },
+  async rewrites() {
+    return [
+      { source: '/gmail-redirect', destination: '/api/email-accounts/oauth/callback' },
+    ]
+  },
   reactStrictMode: true,
   redirects,
 }
