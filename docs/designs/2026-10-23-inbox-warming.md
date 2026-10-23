@@ -146,7 +146,11 @@ day 0. UI for adding them lands in Phase 2.
 
 `src/lib/googleOAuth.ts` requests on next connect:
 - Existing: `gmail.send`
-- Added: `gmail.readonly`, `gmail.modify`, `gmail.labels`
+- Added: `gmail.readonly`, `gmail.modify`
+
+(`gmail.labels` is intentionally not requested — `gmail.modify` already
+grants label CRUD per Google's docs, and the GCP console hides the
+redundant scope.)
 
 Any existing account with `scopes` not containing the new set triggers a
 banner on `/dashboard/email-accounts`: "Reconnect to enable warming".
