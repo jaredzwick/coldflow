@@ -23,8 +23,18 @@ interface SendEmailOptions {
   subject: string;
   bodyHtml?: string;
   bodyText: string;
-  trackingId: string;
+  /**
+   * Required for campaign sends (tracking pixel + click-rewrite in HTML).
+   * Warming sends pass `null` to skip tracking entirely.
+   */
+  trackingId: string | null;
   fromName?: string;
+  /**
+   * Extra RFC-correct headers to attach, name/value pairs. Warming uses this
+   * for `X-Coldflow-Warming: <token>` so the receiver can identify its own
+   * traffic without reading the body.
+   */
+  extraHeaders?: Array<[string, string]>;
 }
 
 interface SendEmailResult {
@@ -41,12 +51,13 @@ interface SendEmailResult {
 function createMimeMessage(options: SendEmailOptions, fromEmail: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
 
-  const htmlBody = options.bodyHtml
-    ? injectTracking(options.bodyHtml, {
-        baseUrl,
-        trackingId: options.trackingId,
-      })
-    : null;
+  const htmlBody =
+    options.bodyHtml && options.trackingId
+      ? injectTracking(options.bodyHtml, {
+          baseUrl,
+          trackingId: options.trackingId,
+        })
+      : options.bodyHtml ?? null;
 
   const message = buildMimeMessage({
     fromEmail,
@@ -56,6 +67,7 @@ function createMimeMessage(options: SendEmailOptions, fromEmail: string): string
     subject: options.subject,
     bodyText: options.bodyText,
     bodyHtml: htmlBody,
+    extraHeaders: options.extraHeaders,
   });
 
   return toGmailRawString(message);

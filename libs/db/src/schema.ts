@@ -546,3 +546,117 @@ export type InsertEmailUnsubscribe = typeof emailUnsubscribe.$inferInsert;
 export type ReplyFollowup = typeof replyFollowup.$inferSelect;
 export type InsertReplyFollowup = typeof replyFollowup.$inferInsert;
 
+// ───────────────────────────── Warming ─────────────────────────────
+
+export const warmingStatusEnum = pgEnum("warming_status", [
+  "off",
+  "ramping",
+  "maintenance",
+  "paused",
+]);
+
+export const warmingMessageStatusEnum = pgEnum("warming_message_status", [
+  "pending",
+  "sent",
+  "landed_inbox",
+  "landed_spam",
+  "pulled_from_spam",
+  "replied",
+  "failed",
+]);
+
+export const warmingSchedule = pgTable(
+  "warming_schedule",
+  {
+    id: text("id").primaryKey(),
+    emailAccountId: text("email_account_id")
+      .notNull()
+      .unique()
+      .references(() => emailAccount.id, { onDelete: "cascade" }),
+    status: warmingStatusEnum("status").notNull().default("off"),
+    startedAt: timestamp("started_at"),
+    dayNumber: integer("day_number").notNull().default(0),
+    targetVolumeToday: integer("target_volume_today").notNull().default(0),
+    sentToday: integer("sent_today").notNull().default(0),
+    volumeResetAt: timestamp("volume_reset_at"),
+    inboxCount7d: integer("inbox_count_7d").notNull().default(0),
+    spamCount7d: integer("spam_count_7d").notNull().default(0),
+    replyCount7d: integer("reply_count_7d").notNull().default(0),
+    maxDailyCap: integer("max_daily_cap").notNull().default(40),
+    rampDays: integer("ramp_days").notNull().default(30),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("warming_schedule_status_idx").on(table.status),
+    index("warming_schedule_target_vs_sent_idx").on(
+      table.targetVolumeToday,
+      table.sentToday
+    ),
+  ]
+);
+
+export const warmingMessage = pgTable(
+  "warming_message",
+  {
+    id: text("id").primaryKey(),
+    senderAccountId: text("sender_account_id")
+      .notNull()
+      .references(() => emailAccount.id, { onDelete: "cascade" }),
+    recipientAccountId: text("recipient_account_id")
+      .notNull()
+      .references(() => emailAccount.id, { onDelete: "cascade" }),
+    warmingToken: text("warming_token").notNull().unique(),
+    subject: text("subject").notNull(),
+    bodyPreview: text("body_preview"),
+    gmailMessageId: text("gmail_message_id"),
+    recipientGmailMessageId: text("recipient_gmail_message_id"),
+    status: warmingMessageStatusEnum("status").notNull().default("pending"),
+    sentAt: timestamp("sent_at"),
+    landedAt: timestamp("landed_at"),
+    pulledFromSpamAt: timestamp("pulled_from_spam_at"),
+    repliedAt: timestamp("replied_at"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("warming_message_sender_idx").on(table.senderAccountId),
+    index("warming_message_recipient_idx").on(table.recipientAccountId),
+    index("warming_message_status_idx").on(table.status),
+    index("warming_message_sent_at_idx").on(table.sentAt),
+    index("warming_message_sender_recipient_idx").on(
+      table.senderAccountId,
+      table.recipientAccountId,
+      table.sentAt
+    ),
+  ]
+);
+
+export const warmingScheduleRelations = relations(warmingSchedule, ({ one }) => ({
+  emailAccount: one(emailAccount, {
+    fields: [warmingSchedule.emailAccountId],
+    references: [emailAccount.id],
+  }),
+}));
+
+export const warmingMessageRelations = relations(warmingMessage, ({ one }) => ({
+  sender: one(emailAccount, {
+    fields: [warmingMessage.senderAccountId],
+    references: [emailAccount.id],
+    relationName: "warmingMessageSender",
+  }),
+  recipient: one(emailAccount, {
+    fields: [warmingMessage.recipientAccountId],
+    references: [emailAccount.id],
+    relationName: "warmingMessageRecipient",
+  }),
+}));
+
+export type WarmingSchedule = typeof warmingSchedule.$inferSelect;
+export type InsertWarmingSchedule = typeof warmingSchedule.$inferInsert;
+export type WarmingMessage = typeof warmingMessage.$inferSelect;
+export type InsertWarmingMessage = typeof warmingMessage.$inferInsert;
+

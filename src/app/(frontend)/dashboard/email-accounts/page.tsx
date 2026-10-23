@@ -2,10 +2,24 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Mail, Server, Trash2 } from 'lucide-react'
+import { Flame, Mail, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmailAccountModal } from '@/components/EmailAccountManagement'
+
+type WarmingStatus = 'off' | 'ramping' | 'maintenance' | 'paused'
+
+interface WarmingInfo {
+  status: WarmingStatus
+  dayNumber?: number
+  rampDays?: number
+  targetVolumeToday?: number
+  sentToday?: number
+  inboxCount7d?: number
+  spamCount7d?: number
+  replyCount7d?: number
+  maxDailyCap?: number
+}
 
 interface EmailAccount {
   id: string
@@ -17,6 +31,7 @@ interface EmailAccount {
   lastSyncedAt: string | null
   errorMessage: string | null
   createdAt: string
+  warming?: WarmingInfo
 }
 
 const ERROR_LABELS: Record<string, string> = {
@@ -78,6 +93,33 @@ function EmailAccountsPageInner() {
       })
     }
   }, [successCode, successEmail, errorCode])
+
+  const handleToggleWarming = async (
+    id: string,
+    email: string,
+    enable: boolean
+  ) => {
+    const res = await fetch(`/api/email-accounts/${id}/warming`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enable }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setBanner({
+        kind: 'error',
+        message: data.error || `Failed to update warming for ${email}`,
+      })
+      return
+    }
+    setBanner({
+      kind: 'success',
+      message: enable
+        ? `Warming on for ${email}. First emails send within 15 minutes.`
+        : `Warming paused for ${email}.`,
+    })
+    fetchAccounts()
+  }
 
   const handleDisconnect = async (id: string, email: string) => {
     if (!confirm(`Disconnect ${email}? Pending emails for this account stop sending.`)) return
@@ -171,19 +213,28 @@ function EmailAccountsPageInner() {
                   </Button>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0 text-sm text-muted-foreground space-y-1">
-                <div>
-                  Quota today: <strong>{account.quotaUsedToday}</strong> / {account.dailyQuota}
+              <CardContent className="pt-0 text-sm text-muted-foreground space-y-3">
+                <div className="space-y-1">
+                  <div>
+                    Quota today: <strong>{account.quotaUsedToday}</strong> / {account.dailyQuota}
+                  </div>
+                  <div>
+                    Last synced:{' '}
+                    {account.lastSyncedAt
+                      ? new Date(account.lastSyncedAt).toLocaleString()
+                      : 'never'}
+                  </div>
+                  {account.errorMessage && (
+                    <div className="text-red-700">Error: {account.errorMessage}</div>
+                  )}
                 </div>
-                <div>
-                  Last synced:{' '}
-                  {account.lastSyncedAt
-                    ? new Date(account.lastSyncedAt).toLocaleString()
-                    : 'never'}
-                </div>
-                {account.errorMessage && (
-                  <div className="text-red-700">Error: {account.errorMessage}</div>
-                )}
+
+                <WarmingSection
+                  account={account}
+                  onToggle={(enable) =>
+                    handleToggleWarming(account.id, account.email, enable)
+                  }
+                />
               </CardContent>
             </Card>
           ))}
@@ -198,6 +249,62 @@ function EmailAccountsPageInner() {
           fetchAccounts()
         }}
       />
+    </div>
+  )
+}
+
+function WarmingSection({
+  account,
+  onToggle,
+}: {
+  account: EmailAccount
+  onToggle: (enable: boolean) => void
+}) {
+  const warming = account.warming
+  const on = warming && warming.status !== 'off'
+  const rampDays = warming?.rampDays ?? 30
+  const dayNumber = warming?.dayNumber ?? 0
+  const sentToday = warming?.sentToday ?? 0
+  const target = warming?.targetVolumeToday ?? 0
+  const inbox = warming?.inboxCount7d ?? 0
+  const spam = warming?.spamCount7d ?? 0
+  const cap = warming?.maxDailyCap ?? 40
+  const progressPct = Math.min(100, Math.round(((target || 0) / cap) * 100))
+
+  const statusLine = on
+    ? warming?.status === 'paused'
+      ? 'Paused — reconnect inbox to resume'
+      : target === 0
+        ? 'Waiting for peers — invite another inbox or wait for the pool to grow'
+        : `Day ${dayNumber} of ${rampDays} · ${sentToday} / ${target} sent today · ${inbox} inbox, ${spam} spam`
+    : 'Off — flip the switch to start building sender reputation'
+
+  return (
+    <div className="rounded-md border bg-background p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-foreground">
+          <Flame className={`h-4 w-4 ${on ? 'text-orange-500' : 'text-gray-400'}`} />
+          <span className="font-medium">Warming</span>
+        </div>
+        <Button
+          variant={on ? 'outline' : 'default'}
+          size="sm"
+          onClick={() => onToggle(!on)}
+        >
+          {on ? 'Pause' : 'Enable'}
+        </Button>
+      </div>
+      <div className={`mt-2 text-xs ${on ? 'text-foreground' : 'text-muted-foreground'}`}>
+        {statusLine}
+      </div>
+      {on && target > 0 && (
+        <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-orange-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }
