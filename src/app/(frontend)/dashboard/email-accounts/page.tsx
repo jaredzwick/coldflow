@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Mail, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,7 @@ const ERROR_LABELS: Record<string, string> = {
   access_denied: 'You denied access on the Google consent screen.',
 }
 
-export default function EmailAccountsPage() {
+function EmailAccountsPageInner() {
   const searchParams = useSearchParams()
   const [modalOpen, setModalOpen] = useState(false)
   const [accounts, setAccounts] = useState<EmailAccount[]>([])
@@ -199,5 +199,19 @@ export default function EmailAccountsPage() {
         }}
       />
     </div>
+  )
+}
+
+export default function EmailAccountsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-4xl py-10">
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
+      <EmailAccountsPageInner />
+    </Suspense>
   )
 }
