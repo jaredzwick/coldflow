@@ -98,9 +98,14 @@ export async function verifyGoogleCredential(credential: string): Promise<TokenP
 export function getGmailAuthorizationUrl(state?: string): string {
   const oauth2Client = getOAuth2Client();
 
+  // Scopes include warming receiver needs (modify + labels) so a single
+  // consent screen covers both campaign send and inbox warming. See
+  // docs/designs/2026-10-23-inbox-warming.md §Scope expansion (D2=A).
   const scopes = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.labels',
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
   ];

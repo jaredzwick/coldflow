@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthorizationError } from '@/lib/authorization';
-import { getEmailAccountsByUserId } from '@coldflow/db';
+import {
+  getEmailAccountsByUserId,
+  getWarmingScheduleByAccountId,
+} from '@coldflow/db';
 
 /**
  * GET /api/email-accounts
@@ -24,20 +27,40 @@ export async function GET(request: NextRequest) {
       subAgencyId || undefined
     );
 
+    const warmingByAccount = await Promise.all(
+      accounts.map((a) => getWarmingScheduleByAccountId(a.id))
+    );
+
     return NextResponse.json({
       success: true,
-      accounts: accounts.map(account => ({
-        id: account.id,
-        email: account.email,
-        provider: account.provider,
-        status: account.status,
-        dailyQuota: account.dailyQuota,
-        quotaUsedToday: account.quotaUsedToday,
-        quotaResetAt: account.quotaResetAt,
-        lastSyncedAt: account.lastSyncedAt,
-        errorMessage: account.errorMessage,
-        createdAt: account.createdAt,
-      })),
+      accounts: accounts.map((account, idx) => {
+        const warming = warmingByAccount[idx];
+        return {
+          id: account.id,
+          email: account.email,
+          provider: account.provider,
+          status: account.status,
+          dailyQuota: account.dailyQuota,
+          quotaUsedToday: account.quotaUsedToday,
+          quotaResetAt: account.quotaResetAt,
+          lastSyncedAt: account.lastSyncedAt,
+          errorMessage: account.errorMessage,
+          createdAt: account.createdAt,
+          warming: warming
+            ? {
+                status: warming.status,
+                dayNumber: warming.dayNumber,
+                rampDays: warming.rampDays,
+                targetVolumeToday: warming.targetVolumeToday,
+                sentToday: warming.sentToday,
+                inboxCount7d: warming.inboxCount7d,
+                spamCount7d: warming.spamCount7d,
+                replyCount7d: warming.replyCount7d,
+                maxDailyCap: warming.maxDailyCap,
+              }
+            : { status: 'off' as const },
+        };
+      }),
     });
   } catch (error) {
     console.error('Error fetching email accounts:', error);
